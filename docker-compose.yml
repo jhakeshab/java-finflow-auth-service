@@ -1,0 +1,44 @@
+version: '3.8'
+services:
+  auth-app:
+    build: .
+    container_name: java-auth-app
+    ports:
+      - "9001:9001"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://auth-db:5432/auth_db
+      - SPRING_DATA_REDIS_HOST=auth-redis
+    depends_on:
+      - auth-db
+      - auth-redis
+    networks:
+      - finflow-net
+
+  auth-db:
+    image: postgres:15
+    container_name: java-auth-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+    volumes:
+      - auth_pg_data:/var/lib/postgresql/data
+    networks:
+      - finflow-net
+
+  auth-redis:
+    image: redis:7-alpine
+    container_name: java-auth-redis
+    ports:
+      - "6380:6379"
+    networks:
+      - finflow-net
+
+networks:
+  finflow-net:
+    driver: bridge
+
+volumes:
+  auth_pg_data:
