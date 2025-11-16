@@ -1,64 +1,95 @@
 package com.finflow.auth.service;
 
+import com.finflow.auth.dto.*;
 import com.finflow.auth.entity.User;
+import com.finflow.auth.exception.*;
 import com.finflow.auth.repository.UserRepository;
 import com.finflow.auth.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.Optional;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashSet;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class AuthService {
+    
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
-    private final RedisTemplate<String, Object> redisTemplate;
 
-    public User register(User user) {
-        user.setPasswordHash(passwordEncoder.encode(user.getPasswordHash()));
-        user.setCreatedAt(LocalDateTime.now());
-        user.setUpdatedAt(LocalDateTime.now());
-        return userRepository.save(user);
-    }
-
-    public String login(String email, String password) {
-        Optional<User> userOpt = userRepository.findByEmail(email);
-        if (userOpt.isPresent() && passwordEncoder.matches(password, userOpt.get().getPasswordHash())) {
-            User user = userOpt.get();
-            String token = jwtUtil.generateToken(user);
-            redisTemplate.opsForValue().set("session:" + user.getId() + ":" + token, "active");
-            return token;
+    public UserDTO register(RegisterRequest request) {
+        // Validate password is not null or empty
+        if (request.getPassword() == null || request.getPassword().trim().isEmpty()) {
+            throw new IllegalArgumentException("Password cannot be empty");
         }
-        throw new RuntimeException("Invalid credentials");
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new UserAlreadyExistsException("Email already registered");
+        }
+
+        User user = User.builder()
+            .email(request.getEmail())
+            .passwordHash(passwordEncoder.encode(request.getPassword()))
+            .firstName(request.getFirstName())
+            .lastName(request.getLastName())
+            .phoneNumber(request.getPhoneNumber())
+            .roles(new HashSet<>())  // Add this line to initialize roles
+            .build();
+
+        User savedUser = userRepository.save(user);
+        return UserDTO.fromEntity(savedUser);
     }
 
-    public void logout(String token, Long userId) {
-        redisTemplate.opsForValue().set("blacklist:" + token, "true");
+    public TokenResponse login(LoginRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+            .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
+
+        if (user.getStatus() == User.UserStatus.SUSPENDED) {
+            throw new UserSuspendedException("Your account is suspended");
+        }
+
+        String token = jwtUtil.generateToken(user.getId(), user.getEmail());
+        Long expiresIn = jwtUtil.getExpirationTime();
+
+        return TokenResponse.builder()
+            .accessToken(token)
+            .tokenType("Bearer")
+            .expiresIn(expiresIn)
+            .user(UserDTO.fromEntity(user))
+            .build();
     }
 
-    public User getUser(Long id) {
-        return userRepository.findById(id).orElse(null);
+    public UserDTO getUserById(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFoundException("User not found"));
+        return UserDTO.fromEntity(user);
     }
 
-    public User updateUser(Long id, Map<String, Object> updates) {
-        return userRepository.findById(id).map(user -> {
-            if (updates.containsKey("kycStatus")) {
-                user.setKycStatus((String) updates.get("kycStatus"));
-            }
-            user.setUpdatedAt(LocalDateTime.now());
-            return userRepository.save(user);
-        }).orElse(null);
+    public UserDTO updateUserProfile(Long userId, UpdateProfileRequest request) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
+        if (request.getLastName() != null) user.setLastName(request.getLastName());
+        if (request.getPhoneNumber() != null) user.setPhoneNumber(request.getPhoneNumber());
+
+        User updated = userRepository.save(user);
+        return UserDTO.fromEntity(updated);
     }
 
     public boolean verifyToken(String token) {
-        if (Boolean.TRUE.equals(redisTemplate.opsForValue().get("blacklist:" + token))) {
-            return false;
-        }
         return jwtUtil.validateToken(token);
+    }
+
+    public Long getUserIdFromToken(String token) {
+        return jwtUtil.getUserIdFromToken(token);
     }
 }

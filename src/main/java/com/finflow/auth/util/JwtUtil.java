@@ -1,58 +1,79 @@
+// JwtUtil.java
 package com.finflow.auth.util;
 
-import com.finflow.auth.entity.User;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 
+@Slf4j
 @Component
 public class JwtUtil {
-    private final SecretKey secretKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
-    private final long jwtExpiration = 86400000L; // 24 hours
 
-    public String generateToken(User user) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("role", user.getRole());
-        claims.put("kycStatus", user.getKycStatus());
-        return createToken(claims, user.getId());
+    @Value("${jwt.secret}")
+    private String jwtSecret;
+
+    @Value("${jwt.expiration}")
+    private long jwtExpiration;
+
+    private SecretKey getSigningKey() {
+        byte[] keyBytes = jwtSecret.getBytes();
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    private String createToken(Map<String, Object> claims, Long subject) {
+    public String generateToken(Long userId, String email) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("sub", String.valueOf(userId));
+        claims.put("email", email);
+        return createToken(claims, String.valueOf(userId));
+    }
+
+    private String createToken(Map<String, Object> claims, String subject) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + jwtExpiration * 1000);
+
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject.toString())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
-                .signWith(secretKey)
+                .claims(claims)
+                .subject(subject)
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(getSigningKey(), SignatureAlgorithm.HS512)
                 .compact();
     }
 
-    public Boolean validateToken(String token) {
+    public Long getUserIdFromToken(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(token);
+            Claims claims = Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+            return Long.parseLong(claims.getSubject());
+        } catch (JwtException e) {
+            log.error("JWT parsing error: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token);
             return true;
-        } catch (Exception e) {
+        } catch (JwtException | IllegalArgumentException e) {
+            log.error("JWT validation error: {}", e.getMessage());
             return false;
         }
     }
 
-    public Long getUserIdFromToken(String token) {
-        return Long.parseLong(extractClaim(token, Claims::getSubject));
-    }
-
-    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = extractAllClaims(token);
-        return claimsResolver.apply(claims);
-    }
-
-    private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(token).getBody();
+    public Long getExpirationTime() {
+        return jwtExpiration;
     }
 }
