@@ -1,81 +1,25 @@
-version: '3.8'
-
 services:
-  auth-app:
+  java-finflow-auth-service:
     build: .
-    container_name: java-auth-app
-    ports:
-      - "9001:8080"
+    ports: ["9001:9001"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://java-auth-postgres:5432/auth_service_db_java
-      SPRING_DATASOURCE_USERNAME: auth_user_java
-      SPRING_DATASOURCE_PASSWORD: auth_password_java
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_REDIS_HOST: java-auth-redis
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/finflow
+      SPRING_DATASOURCE_USERNAME: finflow
+      SPRING_DATASOURCE_PASSWORD: finflow
+      SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
-      SPRING_CACHE_TYPE: redis
-      JWT_SECRET: YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGY=
-      SERVER_PORT: 8080
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      AUTH_SERVICE_URL: http://java-finflow-auth-service:9001
     depends_on:
-      java-auth-postgres:
-        condition: service_healthy
-      java-auth-redis:
-        condition: service_healthy
-    networks:
-      - finflow-net
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-
-  java-auth-postgres:
-    image: postgres:14
-    container_name: java-auth-postgres
-    ports:
-      - "15401:5432"
+      - postgres
+      - redis
+  postgres:
+    image: postgres:15
     environment:
-      POSTGRES_DB: auth_service_db_java
-      POSTGRES_USER: auth_user_java
-      POSTGRES_PASSWORD: auth_password_java
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - auth_pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U auth_user_java -d auth_service_db_java"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - finflow-net
-    restart: unless-stopped
-
-  java-auth-redis:
-    image: redis:7-alpine
-    container_name: java-auth-redis
-    ports:
-      - "16401:6379"
-    command: redis-server --save 60 1 --loglevel warning
-    volumes:
-      - auth_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - finflow-net
-    restart: unless-stopped
-
-volumes:
-  auth_pg_data:
-  auth_redis_data:
-
-networks:
-  finflow-net:
-    driver: bridge
+      POSTGRES_DB: finflow
+      POSTGRES_USER: finflow
+      POSTGRES_PASSWORD: finflow
+    ports: ["5432"]
+  redis:
+    image: redis:7
+    ports: ["6379"]
