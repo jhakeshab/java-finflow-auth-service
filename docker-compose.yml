@@ -11,8 +11,12 @@ services:
       SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
       AUTH_SERVICE_URL: http://java-finflow-auth-service:9001
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - finflow-shared
   postgres:
     image: postgres:15
     environment:
@@ -20,6 +24,25 @@ services:
       POSTGRES_USER: finflow
       POSTGRES_PASSWORD: finflow
     ports: ["5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - finflow-shared
   redis:
     image: redis:7
     ports: ["6379"]
+    networks:
+      - finflow-shared
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+networks:
+  finflow-shared:
+    external: true  # ← Must be pre-created
+    name: finflow-java-shared

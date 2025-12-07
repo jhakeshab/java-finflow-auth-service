@@ -52,6 +52,15 @@ public class AuthController {
         return authService.login(username, password);
     }
 
+    // Internal endpoint for KYC Service (no auth required for internal calls)
+    @PostMapping("/user/{id}/kyc")
+    public Map<String, String> updateKycStatus(@PathVariable Long id, 
+                                            @RequestBody Map<String, String> payload) {
+        String status = payload.get("status");
+        authService.updateKycStatus(id, status);
+        return Map.of("status", "KYC status updated for user " + id);
+    }
+
     @GetMapping("/user/{id}")
     public Map<String, Object> getUser(@PathVariable Long id) {
         var user = authService.getUserById(id);

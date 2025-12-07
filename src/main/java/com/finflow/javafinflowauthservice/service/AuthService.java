@@ -4,6 +4,7 @@ package com.finflow.javafinflowauthservice.service;
 import com.finflow.javafinflowauthservice.model.User;
 import com.finflow.javafinflowauthservice.repository.UserRepository;
 import com.finflow.javafinflowauthservice.util.JwtUtil;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,13 +19,15 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     public AuthService(UserRepository userRepository, 
                        PasswordEncoder passwordEncoder, 
-                       JwtUtil jwtUtil) {
+                       JwtUtil jwtUtil, KafkaTemplate<String, String> kafkaTemplate) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Transactional
@@ -43,6 +46,10 @@ public class AuthService {
         user.setUpdatedAt(LocalDateTime.now());
 
         User saved = userRepository.save(user);
+
+        String event = String.format("{\"user_id\":%d,\"email\":\"%s\"}", 
+        saved.getId(), saved.getEmail());
+        kafkaTemplate.send("user.created", event);
 
         String token = jwtUtil.generateToken(saved.getId(), saved.getKycStatus(), email);
 
