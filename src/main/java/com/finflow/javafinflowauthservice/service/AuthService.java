@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.lang.Boolean
 
 @Service
 public class AuthService {
@@ -41,7 +42,8 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setName(name);
         user.setPhone(phone);
-        user.setKycStatus("pending"); // ← NOT verified!
+        /*user.setKycStatus("pending"); // ← NOT verified!*/
+        user.setKycVerified(false);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
 
@@ -67,7 +69,7 @@ public class AuthService {
             throw new RuntimeException("Invalid credentials");
         }
 
-        String token = jwtUtil.generateToken(user.getId(), user.getKycStatus(), email);
+        String token = jwtUtil.generateToken(user.getId(), user.getKycVerified(), email);
 
         Map<String, Object> response = new HashMap<>();
         response.put("token", token);

@@ -23,7 +23,8 @@ public class User {
 
     // IMPORTANT: Starts as "pending", NOT "verified"
     @Column(nullable = false)
-    private String kycStatus = "pending"; // pending, verified, rejected
+    /*private String kycStatus = "pending"; // pending, verified, rejected*/
+    private Boolean kycVerified = false;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -38,8 +39,8 @@ public class User {
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
 
-    public String getKycStatus() { return kycStatus; }
-    public void setKycStatus(String kycStatus) { this.kycStatus = kycStatus; }
+    public Boolean getKycVerified() { return kycVerified; }
+    public void setKycVerified(Boolean kycVerified) { this.kycVerified = kycVerified; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
